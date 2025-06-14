@@ -45,8 +45,8 @@ func main() {
 	}
 
 	optimisationSettings := optimiser.OptimisationSettings{
-		Iterations:         10,
-		TrialsPerRound:     10,
+		Iterations:         30,
+		TrialsPerRound:     30,
 		SurvivorPercentage: 0.1,
 	}
 

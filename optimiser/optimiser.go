@@ -13,13 +13,18 @@ func (t *Trial) CalculateCost() error {
 	var costs []int
 	var maxSkill int
 	var minSkill int
-	for _, team := range t.Teams {
-		// this will give us the total for each team
+	var largestTeam int
+	var smallestTeam int
+
+	var teamSizes = make([]int, len(t.Teams))
+
+	for i, team := range t.Teams {
 		teamCost, err := team.CalculateTotalSkill()
-		costs = append(costs, teamCost)
 		if err != nil {
 			return err
 		}
+		costs = append(costs, teamCost)
+		teamSizes[i] = len(team.People)
 	}
 
 	for i, skillTotal := range costs {
@@ -39,7 +44,23 @@ func (t *Trial) CalculateCost() error {
 
 	}
 
-	t.Cost = maxSkill - minSkill
+	for i, teamSize := range teamSizes {
+		if i == 0 {
+			largestTeam = teamSize
+			smallestTeam = teamSize
+			continue
+		}
+
+		if teamSize > largestTeam {
+			largestTeam = teamSize
+		}
+
+		if teamSize < smallestTeam {
+			smallestTeam = teamSize
+		}
+	}
+
+	t.Cost = (maxSkill - minSkill) + (largestTeam - smallestTeam)
 
 	return nil
 }
@@ -55,64 +76,51 @@ func (t *Trial) Clone() Trial {
 }
 
 func (t *Trial) Assign() error {
-	var err error
-	t.People, err = math_functions.RandomSampleWithoutReplacement[Person](&t.People, len(t.People))
+	shuffled, err := math_functions.RandomSampleWithoutReplacement(t.People, len(t.People))
 	if err != nil {
 		return err
 	}
 
+	// Clear all teams before assigning
+	for i := range t.Teams {
+		t.Teams[i].People = nil
+	}
+
 	team := 0
-	for _, person := range t.People {
+	for _, person := range shuffled {
 		t.Teams[team].People = append(t.Teams[team].People, person)
 		team++
-
 		if team >= len(t.Teams) {
 			team = 0
 		}
-
 	}
 
 	return nil
 }
 
 func (t *Trial) MixTeams() error {
-	//var err error
-	var indexes []int
-
-	for i := 0; i < len(t.Teams); i++ {
-		indexes = append(indexes, i)
+	indexes := make([]int, len(t.Teams))
+	for i := range indexes {
+		indexes[i] = i
 	}
 
-	teamIdx, err := math_functions.RandomSampleWithoutReplacement[int](&indexes, 2)
-
+	teamIdx, err := math_functions.RandomSampleWithoutReplacement(indexes, 2)
 	if err != nil {
 		return err
 	}
 
-	team1 := t.Teams[teamIdx[0]]
-	team2 := t.Teams[teamIdx[1]]
+	team1 := &t.Teams[teamIdx[0]]
+	team2 := &t.Teams[teamIdx[1]]
 
-	team1PlayerIdx := rand.IntN(len(team1.People))
-	team2PlayerIdx := rand.IntN(len(team2.People))
+	if len(team1.People) == 0 || len(team2.People) == 0 {
+		return nil // skip if no one to swap
+	}
 
-	removedPlayer1 := team1.People[team1PlayerIdx]
-	removedPlayer2 := team2.People[team2PlayerIdx]
+	i1 := rand.IntN(len(team1.People))
+	i2 := rand.IntN(len(team2.People))
 
-	//remove the player
-	t.Teams[teamIdx[0]].People = append(
-		t.Teams[teamIdx[0]].People[:team1PlayerIdx], t.Teams[teamIdx[0]].People[team1PlayerIdx+1:]...,
-	)
-
-	//remove the player
-	t.Teams[teamIdx[1]].People = append(
-		t.Teams[teamIdx[1]].People[:team2PlayerIdx], t.Teams[teamIdx[1]].People[team2PlayerIdx+1:]...,
-	)
-
-	t.Teams[teamIdx[0]].People = append(
-		t.Teams[teamIdx[0]].People[:team1PlayerIdx], removedPlayer2)
-
-	t.Teams[teamIdx[1]].People = append(
-		t.Teams[teamIdx[1]].People[:team2PlayerIdx], removedPlayer1)
+	// ✅ Swap directly, no remove/append needed
+	team1.People[i1], team2.People[i2] = team2.People[i2], team1.People[i1]
 
 	return nil
 }
@@ -209,9 +217,9 @@ func (p *ProblemSpace) Optimise(settings OptimisationSettings) error {
 
 		previousRound := rounds[iteration-1]
 		precedingTrials := previousRound.Trials[:settings.NumberOfSurvivors()]
+		trialIdx := 0
 
 		for i := 0; i < settings.TrialsPerRound; i++ { //todo: turn this into a go-routine
-			trialIdx := 0
 			newTrial := precedingTrials[trialIdx].Clone()
 
 			if i > 0 {

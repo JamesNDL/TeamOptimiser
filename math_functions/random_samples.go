@@ -5,21 +5,19 @@ import (
 	"math/rand"
 )
 
-func RandomSampleWithoutReplacement[T any](list *[]T, numberOfSamples int) ([]T, error) {
+func RandomSampleWithoutReplacement[T any](list []T, numberOfSamples int) ([]T, error) {
 	if numberOfSamples <= 0 {
-		return []T{}, errors.New("number of samples in RandomSampleWithoutReplacement needs to be > 0.")
+		return nil, errors.New("number of samples must be > 0")
 	}
 
-	myList := *list
-	rand.Shuffle(len(myList), func(i, j int) {
-		myList[i], myList[j] = myList[j], myList[i]
+	shuffled := append([]T(nil), list...) // make a copy
+	rand.Shuffle(len(shuffled), func(i, j int) {
+		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
 	})
 
-	if numberOfSamples > len(myList) {
-		numberOfSamples = len(myList)
+	if numberOfSamples > len(shuffled) {
+		numberOfSamples = len(shuffled)
 	}
 
-	samples := myList[:numberOfSamples]
-	*list = myList[numberOfSamples:]
-	return samples, nil
+	return shuffled[:numberOfSamples], nil
 }
